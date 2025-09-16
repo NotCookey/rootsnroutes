@@ -1,16 +1,11 @@
 from flask import Flask, request, jsonify
-import os
+import io
 import json
 import re
-from werkzeug.utils import secure_filename
 from google import genai
 from google.genai import types
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
-
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Gemini client
 client = genai.Client(api_key="AIzaSyDuoaSb4koA4JBsY9g5gXUSYAFIMbVd_wA")
@@ -58,15 +53,14 @@ Return only JSON with keys:
 """
 
 def extract_json_from_response(response_text):
-    """Pull clean JSON out of Gemini response"""
     json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
     if json_match:
         return json_match.group(0)
     return response_text
 
-def analyze_image(image_path):
+def analyze_image(file_bytes, filename):
     try:
-        uploaded_file = client.files.upload(file=image_path)
+        uploaded_file = client.files.upload(file=io.BytesIO(file_bytes), filename=filename)
 
         contents = [
             types.Part.from_text(text=system_instruction),
@@ -81,13 +75,10 @@ def analyze_image(image_path):
         json_text = extract_json_from_response(response.text)
         result = json.loads(json_text)
 
-        required_keys = ["languages", "script", "confidence", "text_direction", "notes", "additional_info"]
-        for key in required_keys:
+        # fill missing keys
+        for key in ["languages", "script", "confidence", "text_direction", "notes", "additional_info"]:
             if key not in result:
-                if key == "languages":
-                    result[key] = {"primary_language": "unknown", "detected_languages": []}
-                else:
-                    result[key] = ""
+                result[key] = {"primary_language": "unknown", "detected_languages": []} if key=="languages" else ""
 
         return result
 
@@ -110,17 +101,11 @@ def analyze():
     if file.filename == '':
         return jsonify({'error': 'No image selected'}), 400
 
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-
+    file_bytes = file.read()
     try:
-        result = analyze_image(filepath)
-        os.remove(filepath)
+        result = analyze_image(file_bytes, file.filename)
         return jsonify(result)
     except Exception as e:
-        if os.path.exists(filepath):
-            os.remove(filepath)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
