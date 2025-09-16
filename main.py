@@ -10,9 +10,7 @@ from google.genai import types
 
 app = Flask(__name__)
 
-# Gemini client - Replace with your actual API key
 client = genai.Client(api_key="AIzaSyDuoaSb4koA4JBsY9g5gXUSYAFIMbVd_wA")
-
 system_instruction = """
 You are an AI expert in Northeast Indian languages and cultural heritage preservation.
 Your job:
@@ -27,6 +25,7 @@ Your job:
    - History of the language
    - Cultural significance
    - Links to credible resources or further reading
+4. Translate all text in the image into English and include it in the JSON. If translation is not possible, return "none".
 
 Return only valid JSON with this exact structure:
 {
@@ -51,7 +50,8 @@ Return only valid JSON with this exact structure:
   "confidence": 0.0,
   "text_direction": "",
   "notes": "",
-  "additional_info": ""
+  "additional_info": "",
+  "english_translation": ""
 }
 """
 
@@ -117,7 +117,7 @@ def analyze_image(file_bytes, filename):
             
             # Generate content with structured output
             response = client.models.generate_content(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-lite",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     temperature=0.1,  # Lower temperature for more consistent JSON
